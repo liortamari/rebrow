@@ -13,6 +13,7 @@ app = Flask(__name__)
 # key for cookie safety. Shal be overridden using ENV var SECRET_KEY
 app.secret_key = os.getenv("SECRET_KEY", "lasfuoi3ro8w7gfow3bwiubdwoeg7p23r8g23rg")
 passwords = defaultdict(dict)
+use_ssl = defaultdict(dict)
 
 # Description of info keys
 # TODO: to be continued.
@@ -131,6 +132,7 @@ def login():
         port = int(request.form["port"])
         db = int(request.form["db"])
         passwords[host][port] = request.form["password"] or None
+        use_ssl[host][port] = request.form.get("usessl") == 'on'
         url = url_for("server_db", host=host, port=port, db=db)
         return redirect(url)
     else: 
@@ -145,7 +147,8 @@ def server_db(host, port, db):
     List all databases and show info on server
     """
     s = time.time()
-    r = redis.StrictRedis(host=host, port=port, db=0, password=passwords[host].get(port))
+    r = redis.StrictRedis(host=host, port=port, db=0, password=passwords[host].get(port), ssl=use_ssl[host].get(port),
+                          socket_connect_timeout=5, socket_timeout=5)
     info = r.info("all")
     dbsize = r.dbsize()
     return render_template('server.html',
@@ -164,7 +167,8 @@ def keys(host, port, db):
     List keys for one database
     """
     s = time.time()
-    r = redis.StrictRedis(host=host, port=port, db=db, password=passwords[host].get(port))
+    r = redis.StrictRedis(host=host, port=port, db=db, password=passwords[host].get(port), ssl=use_ssl[host].get(port),
+                          socket_connect_timeout=5, socket_timeout=5)
     if request.method == "POST":
         action = request.form["action"]
         app.logger.debug(action)
@@ -208,7 +212,8 @@ def key(host, port, db, key):
     """
     key = base64.urlsafe_b64decode(key.encode("utf8"))
     s = time.time()
-    r = redis.StrictRedis(host=host, port=port, db=db, password=passwords[host].get(port))
+    r = redis.StrictRedis(host=host, port=port, db=db, password=passwords[host].get(port), ssl=use_ssl[host].get(port),
+                          socket_connect_timeout=5, socket_timeout=5)
     dump = r.dump(key)
     if dump is None:
         abort(404)
@@ -256,7 +261,8 @@ def pubsub(host, port, db):
 
 
 def pubsub_event_stream(host, port, db, pattern):
-    r = redis.StrictRedis(host=host, port=port, db=db, password=passwords[host].get(port))
+    r = redis.StrictRedis(host=host, port=port, db=db, password=passwords[host].get(port), ssl=use_ssl[host].get(port),
+                          socket_connect_timeout=5, socket_timeout=5)
     p = r.pubsub()
     p.psubscribe(pattern)
     for message in p.listen():
